@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PEEP Titration Report</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; margin: 40px auto; max-width: 800px; background: #f0f2f5; color: #333; }
+    input[type="text"], input[type="number"], input[type="email"] { width: 60px; padding: 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+    table { border-collapse: collapse; width: 100%; background: white; font-size: 12px; margin-top: 10px; table-layout: fixed; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    th { background-color: #e0e7ff; }
+    textarea { width: 100%; height: 80px; margin-top: 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; padding: 6px; }
+    .section { background: white; padding: 20px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    button { padding: 10px 20px; margin-top: 20px; border: none; background-color: #4f46e5; color: white; border-radius: 6px; font-size: 14px; cursor: pointer; }
+    button:hover { background-color: #4338ca; }
+    .timestamp { font-size: 12px; color: #666; margin-top: 10px; text-align: right; }
+    h2, h3 { color: #1f2937; }
+    .green { color: green; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div id="report">
+  <div class="section">
+    <h2>Optimal PEEP Titration</h2>
+    <h3>Pre-study vitals:</h3>
+    Pulse: <input type="text" name="pre_pulse"> bpm
+    RR: <input type="text" name="pre_rr"> bpm
+    SpO₂: <input type="text" name="pre_spo2"> %
+    BP: <input type="text" name="pre_bp"> mmHg
+  </div>
+
+  <div class="section">
+    <h3>PEEP titration results</h3>
+    <label>Current PEEP (cmH₂O):</label> <input type="number" id="current_peep" oninput="calculatePEEPLabels()">
+    <table>
+      <tr><th>PEEP (cmH₂O)</th><th id="peep_-4">PEEP -4</th><th id="peep_-2">PEEP -2</th><th id="peep_current">Current PEEP</th><th id="peep_+2">PEEP +2</th><th id="peep_+4">PEEP +4</th></tr>
+      <tr><td>Plateau pressure</td>
+        <td><input name="pp_-4" class="pp"></td><td><input name="pp_-2" class="pp"></td><td><input name="pp_current" class="pp"></td><td><input name="pp_+2" class="pp"></td><td><input name="pp_+4" class="pp"></td></tr>
+      <tr><td>Static compliance</td>
+        <td><input name="sc_-4" class="sc"></td><td><input name="sc_-2" class="sc"></td><td><input name="sc_current" class="sc"></td><td><input name="sc_+2" class="sc"></td><td><input name="sc_+4" class="sc"></td></tr>
+      <tr><td>Driving pressure</td>
+        <td><input name="dp_-4" class="dp"></td><td><input name="dp_-2" class="dp"></td><td><input name="dp_current" class="dp"></td><td><input name="dp_+2" class="dp"></td><td><input name="dp_+4" class="dp"></td></tr>
+      <tr><td>SpO₂</td>
+        <td><input name="spo2_-4" class="spo2"></td><td><input name="spo2_-2" class="spo2"></td><td><input name="spo2_current" class="spo2"></td><td><input name="spo2_+2" class="spo2"></td><td><input name="spo2_+4" class="spo2"></td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Post-study vitals:</h3>
+    Pulse: <input type="text" name="post_pulse"> bpm
+    RR: <input type="text" name="post_rr"> bpm
+    SpO₂: <input type="text" name="post_spo2"> %
+    BP: <input type="text" name="post_bp"> mmHg
+  </div>
+
+  <div class="section">
+    <h3>Conclusion:</h3>
+    <textarea name="conclusion" id="conclusion" placeholder="Enter your conclusion here"></textarea>
+  </div>
+
+  <div class="timestamp" id="timestamp"></div>
+</div>
+
+<div style="text-align: center;">
+  <button onclick="generatePDF()">Download PDF</button>
+</div>
+
+<script>
+function calculatePEEPLabels() {
+  const val = parseInt(document.getElementById('current_peep').value);
+  if (!isNaN(val)) {
+    document.getElementById('peep_-4').textContent = `PEEP ${val - 4} cmH₂O`;
+    document.getElementById('peep_-2').textContent = `PEEP ${val - 2} cmH₂O`;
+    document.getElementById('peep_current').textContent = `Current PEEP (${val} cmH₂O)`;
+    document.getElementById('peep_+2').textContent = `PEEP ${val + 2} cmH₂O`;
+    document.getElementById('peep_+4').textContent = `PEEP ${val + 4} cmH₂O`;
+  }
+}
+
+function generatePDF() {
+  const inputs = document.querySelectorAll('#report input, #report textarea');
+  inputs.forEach(input => {
+    if (!input.value.trim()) {
+      input.value = 'N/A';
+    }
+  });
+
+  // 綠色標記
+  document.querySelectorAll('.pp').forEach(input => {
+    input.classList.remove('green');
+    if (parseFloat(input.value) <= 30) input.classList.add('green');
+  });
+  document.querySelectorAll('.dp').forEach(input => {
+    input.classList.remove('green');
+    if (parseFloat(input.value) <= 15) input.classList.add('green');
+  });
+
+  const spo2Inputs = Array.from(document.querySelectorAll('.spo2'));
+  let maxSpo2 = Math.max(...spo2Inputs.map(i => parseFloat(i.value) || 0));
+  spo2Inputs.forEach(input => {
+    input.classList.remove('green');
+    if (parseFloat(input.value) === maxSpo2) input.classList.add('green');
+  });
+
+  const scInputs = Array.from(document.querySelectorAll('.sc'));
+  let maxSc = Math.max(...scInputs.map(i => parseFloat(i.value) || 0));
+  scInputs.forEach(input => {
+    input.classList.remove('green');
+    if (parseFloat(input.value) === maxSc) input.classList.add('green');
+  });
+
+  // Optimal PEEP 決定
+  const rows = ['pp', 'dp', 'spo2', 'sc'];
+  const columns = ['-4', '-2', 'current', '+2', '+4'];
+  const scores = { '-4': 0, '-2': 0, 'current': 0, '+2': 0, '+4': 0 };
+  rows.forEach(cls => {
+    columns.forEach(col => {
+      const el = document.querySelector(`[name="${cls}_${col}"]`);
+      if (el && el.classList.contains('green')) scores[col]++;
+    });
+  });
+  let optimal = columns.reduce((a, b) => scores[a] >= scores[b] ? a : b);
+  const currentVal = parseInt(document.getElementById('current_peep').value);
+  const offsetMap = { '-4': -4, '-2': -2, 'current': 0, '+2': 2, '+4': 4 };
+  const optimalPEEP = currentVal + (offsetMap[optimal] || 0);
+
+  document.getElementById('conclusion').value = `PEEP ${optimalPEEP} cmH₂O was identified as the optimal PEEP during this titration study.`;
+  document.getElementById('timestamp').innerText = 'Generated on: ' + new Date().toLocaleString();
+
+  const element = document.getElementById('report');
+  html2pdf().set({
+    margin: 0.5,
+    filename: 'PEEP_Titration_Report.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+  }).from(element).save();
+}
+</script>
+
+</body>
+</html>
